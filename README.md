@@ -64,9 +64,9 @@ Single Node process on port 4320: Hono API + MCP (streamable HTTP, stateless) + 
 ## The 2-minute demo
 
 1. Start: `scripts/serve.sh`, open http://localhost:4320. Onboarding: **Connect PayPal** (approve once on the sandbox), **Write your policy** (the example is pre-filled; Compile, review the highlighted sentence-to-rule chips, Confirm), **Create an agent key**.
-2. In a terminal: `ALLOWANCE_KEY=<key> npm run demo:agent` (or omit the key and it creates one). It fires three intents:
+2. In a terminal: `ALLOWANCE_KEY=<key> npm run demo:agent` (or omit the key and it creates one). It first seeds the hero policy if none exists, plus one clearly labelled earlier OpenAI purchase ("demo history", no PayPal ids, not refundable) so OpenAI is a known vendor: the policy asks about *new* vendors, so otherwise every first request would be ASK. It fires three intents:
    - OpenAI $15 API credits → **APPROVE**, charged to your vaulted PayPal, appears in the ledger with its order and capture ids.
-   - Coinbase $40 USDC → **DENY**, "Category crypto is blocked by your policy."
+   - Databento $40 historical dataset → **DENY**, "$40.00 exceeds the $20.00 per-purchase cap for data."
    - Lambda Labs $64 GPU credits → **ASK**, a phone-style card lands in the Inbox.
 3. Open the Inbox, **Approve with PayPal**, finish on PayPal's sandbox page; you land back with the order captured.
 4. Watch the budget meter move (alert banner and feed entry at 80%). Click **Refund** on a captured row.
@@ -107,13 +107,14 @@ Tools: `request_purchase`, `get_allowance`, `list_my_purchases`, `get_purchase_s
 ```bash
 npm test          # vitest: rules engine (all branches, budget math, month rollover, USD-only), policy schema, PayPal client (mocked fetch), rate limiter, no-AI/no-PayPal end-to-end
 npm run typecheck
+npm run paypal:selftest   # live sandbox check (needs PAYPAL_CLIENT_ID/SECRET): OAuth, setup token + approve link, 1.00 USD order
 npm run build
 ```
 
 ## Honest limits
 
-- The PayPal integration is written against the documented sandbox API and unit-tested with mocked `fetch`, but it has not yet been run against live sandbox credentials. Expect to tune request fields if PayPal's sandbox is stricter (e.g. vault-charge `stored_credential` values).
+- The PayPal integration is written against the documented sandbox API and unit-tested with mocked `fetch`, but it has not yet been run against live sandbox credentials. Request bodies, headers and enums were checked against PayPal's published OpenAPI specs (see links in `server/paypal.ts`). Run `npm run paypal:selftest` with sandbox creds to verify live; the Overview page shows a PayPal status panel (credentials, vault token, last API error).
 - Single owner, single policy, USD only. In-memory rate limiter and a process-local budget lock (one server instance).
-- An owner-approved ASK is not re-checked against the budget.
+- An owner-approved ASK is re-checked against the budget at approval time and again before capture; if it no longer fits, the owner sees an error and the purchase stays in the inbox (decline it or raise the budget).
 
 Built for the PayPal AI Hackathon, Nov 2026. MIT licensed.

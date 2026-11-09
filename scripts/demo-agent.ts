@@ -1,4 +1,5 @@
-export {};
+import { openDb } from "../server/db";
+import { seedDemo } from "../server/demo";
 /** Fires 3 realistic purchase intents at a running Allowance server using an agent key. */
 const base = process.env.ALLOWANCE_URL ?? "http://localhost:4320";
 const owner = { "content-type": "application/json", "x-owner-passcode": process.env.OWNER_PASSCODE ?? "" };
@@ -10,9 +11,12 @@ async function key(): Promise<string> {
   return ((await r.json()) as any).key;
 }
 
+// Hero policy + one labelled earlier OpenAI purchase (so OpenAI is a known vendor). No-op if a policy already exists.
+if (!process.env.SKIP_SEED) { const s = seedDemo(openDb()); if (s.policy || s.history) console.log(`Seeded demo data${s.policy ? " (hero policy)" : ""}${s.history ? " (earlier OpenAI purchase, labelled demo history)" : ""}.`); }
+
 const intents = [
   { vendor: "OpenAI", item: "$15 API credit top-up for the eval run", amount: 15, currency: "USD", category: "api_credits", recurring: false, justification: "The nightly eval job ran out of API credits." },
-  { vendor: "Coinbase", item: "Buy 40 USDC to pay a bounty", amount: 40, currency: "USD", category: "other", recurring: false, justification: "Contributor asked to be paid in stablecoin." },
+  { vendor: "Databento", item: "Historical market dataset license", amount: 40, currency: "USD", category: "data", recurring: false, justification: 'Backtest needs a one-off tick dataset.' },
   { vendor: "Lambda Labs", item: "GPU cloud credits for a fine-tuning run", amount: 64, currency: "USD", category: "cloud", recurring: false, justification: "Need a GPU box for a one-off fine-tune of the ranking model." },
 ];
 

@@ -34,10 +34,13 @@ describe("PayPalClient (mocked fetch)", () => {
     expect(r).toEqual({ setupTokenId: "SETUP1", approveUrl: expect.stringContaining("approve") });
     const call = calls[1];
     expect(call.url).toMatch(/\/v3\/vault\/setup-tokens$/);
-    expect(body(call).payment_source.paypal).toMatchObject({ usage_type: "MERCHANT", permit_multiple_payment_tokens: true });
+    expect(body(call).payment_source.paypal).toMatchObject({ usage_type: "MERCHANT", customer_type: "CONSUMER", permit_multiple_payment_tokens: true, usage_pattern: "UNSCHEDULED_POSTPAID", experience_context: { return_url: "http://r", cancel_url: "http://c", user_action: "CONTINUE" } });
+    const h = call.init.headers as any;
+    expect(h["PayPal-Request-Id"]).toBeTruthy(); expect(h["Content-Type"]).toBe("application/json"); expect(h.Authorization).toBe("Bearer tok");
+    expect(h.Prefer).toBeUndefined(); // Vault v3 specs define no Prefer header
   });
   it("exchanges setup token for payment token", async () => {
-    const { c, calls } = mk(() => json({ id: "VAULT1", customer: { id: "CUST" }, payment_source: { paypal: { email_address: "b@x.com" } } }));
+    const { c, calls } = mk(() => json({ id: "VAULT1", customer: { id: "CUST" }, status: "VAULTED", payment_source: { paypal: { email_address: "b@x.com", payer_id: "PAYER1", usage_type: "MERCHANT" } }, links: [] }, 201));
     expect(await c.createPaymentToken("SETUP1")).toEqual({ vaultId: "VAULT1", customerId: "CUST", email: "b@x.com" });
     expect(body(calls[1])).toEqual({ payment_source: { token: { id: "SETUP1", type: "SETUP_TOKEN" } } });
   });
@@ -48,18 +51,37 @@ describe("PayPalClient (mocked fetch)", () => {
     const b = body(calls[1]);
     expect(b.intent).toBe("CAPTURE");
     expect(b.purchase_units[0].amount).toEqual({ currency_code: "USD", value: "12.50" });
-    expect(b.payment_source.paypal.vault_id).toBe("VAULT1");
+    expect(b.payment_source.paypal).toEqual({ vault_id: "VAULT1", stored_credential: { payment_initiator: "MERCHANT", usage: "SUBSEQUENT", usage_pattern: "UNSCHEDULED_POSTPAID" } });
+    expect(b.purchase_units[0]).toMatchObject({ reference_id: "int_1", custom_id: "int_1", description: "Vendor: item" });
+    expect((calls[1].init.headers as any).Prefer).toBe("return=representation");
     expect((calls[1].init.headers as any)["PayPal-Request-Id"]).toBe("order-int_1");
   });
   it("creates an approval order and returns the payer-action link", async () => {
-    const { c } = mk(() => json({ id: "ORD2", status: "PAYER_ACTION_REQUIRED", links: [{ rel: "payer-action", href: "https://sandbox.paypal.com/checkoutnow?token=ORD2" }] }));
+    const { c, calls } = mk(() => json({ id: "ORD2", status: "PAYER_ACTION_REQUIRED", links: [{ rel: "self", href: "https://api/x" }, { rel: "payer-action", href: "https://sandbox.paypal.com/checkoutnow?token=ORD2" }] }, 201));
     expect((await c.createApprovalOrder(60, "d", "int_2", "http://r", "http://c")).approveUrl).toContain("checkoutnow");
+    expect(body(calls[1]).payment_source.paypal.experience_context).toEqual({ brand_name: "Allowance", user_action: "PAY_NOW", shipping_preference: "NO_SHIPPING", return_url: "http://r", cancel_url: "http://c" });
+    expect((calls[1].init.headers as any)["PayPal-Request-Id"]).toBe("order-int_2");
   });
   it("captures an order and refunds a capture", async () => {
     const { c, calls } = mk((u) => u.includes("/refund") ? json({ id: "REF1", status: "COMPLETED" }) : json({ id: "ORD1", status: "COMPLETED", purchase_units: [{ payments: { captures: [{ id: "CAP9", status: "COMPLETED" }] } }] }));
     expect((await c.captureOrder("ORD1")).captureId).toBe("CAP9");
     expect(await c.refundCapture("CAP9")).toEqual({ refundId: "REF1", status: "COMPLETED" });
     expect(calls.map((x) => x.url.replace(c.baseUrl, ""))).toEqual(["/v1/oauth2/token", "/v2/checkout/orders/ORD1/capture", "/v2/payments/captures/CAP9/refund"]);
+    expect(calls[1].init.body).toBeUndefined(); // capture takes no body
+    expect((calls[1].init.headers as any)).toMatchObject({ "PayPal-Request-Id": "capture-ORD1", Prefer: "return=representation" });
+    expect((calls[2].init.headers as any)).toMatchObject({ "PayPal-Request-Id": "refund-CAP9", Prefer: "return=representation" });
+  });
+  it("treats a FAILED/CANCELLED refund as an error", async () => {
+    const { c } = mk(() => json({ id: "REF2", status: "FAILED" }, 201));
+    await expect(c.refundCapture("CAP1")).rejects.toThrow(/FAILED/);
+  });
+  it("records the last API error and clears it on success", async () => {
+    let n = 0;
+    const { c } = mk(() => (n++ === 0 ? json({ message: "nope" }, 400) : json({ id: "O", status: "CREATED" })));
+    await expect(c.getOrder("O")).rejects.toThrow();
+    expect(c.lastError).toMatchObject({ status: 400, message: expect.stringContaining("nope") });
+    await c.getOrder("O");
+    expect(c.lastError).toBeNull(); expect(c.lastOkAt).not.toBeNull();
   });
   it("throws PayPalError with detail on API errors", async () => {
     const { c } = mk(() => json({ name: "UNPROCESSABLE_ENTITY", details: [{ description: "Instrument declined" }] }, 422));

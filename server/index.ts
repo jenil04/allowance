@@ -99,7 +99,7 @@ export function createApp(opts: { db?: ReturnType<typeof openDb>; paypal?: PayPa
     const vault = getSetting(db, "paypal_vault_id");
     return c.json({
       ai: { enabled: !!llm, provider: llm?.name ?? null },
-      paypal: { configured: paypal.configured, healthy: health.ok, error: paypal.configured ? health.error : "PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET not set", connected: !!vault, email: getSetting(db, "paypal_email"), baseUrl: paypal.baseUrl },
+      paypal: { configured: paypal.configured, healthy: health.ok, error: paypal.configured ? health.error : "PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET not set", connected: !!vault, email: getSetting(db, "paypal_email"), baseUrl: paypal.baseUrl, vaultTokenPresent: !!vault, lastError: paypal.lastError, lastOkAt: paypal.lastOkAt, checkedAt: health.checkedAt ?? null },
       onboarding: { paypal: !!vault, policy: !!pol, agent: agents > 0 },
       publicUrl, passcode: !!passcode,
     });

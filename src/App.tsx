@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api, getPass, setPass, usePoll } from "./api";
 import { ActivePolicy, PolicyEditor } from "./Policy";
 
-type Status = { ai: { enabled: boolean; provider: string | null }; paypal: { configured: boolean; healthy: boolean; error?: string; connected: boolean; email: string | null; baseUrl: string }; onboarding: { paypal: boolean; policy: boolean; agent: boolean }; publicUrl: string };
+type Status = { ai: { enabled: boolean; provider: string | null }; paypal: { configured: boolean; healthy: boolean; error?: string; connected: boolean; email: string | null; baseUrl: string; vaultTokenPresent: boolean; lastError: { message: string; status: number; at: number } | null; lastOkAt: number | null; checkedAt: number | null }; onboarding: { paypal: boolean; policy: boolean; agent: boolean }; publicUrl: string };
 type Budget = { month: string; budget: number; spent: number; remaining: number; pct: number; alert: boolean; hasPolicy: boolean };
 type Intent = any;
 
@@ -46,7 +46,25 @@ function Feed() {
   );
 }
 
-function Overview({ status }: { status: Status }) {
+function PayPalPanel({ status, reload }: { status: Status; reload?: () => void }) {
+  const p = status.paypal;
+  const row = (label: string, ok: boolean | null, text: string) => <div className="li"><span>{label}</span><span className={ok === null ? "muted small" : `pill ${ok ? "approve" : "deny"}`}>{text}</span></div>;
+  return (
+    <div className="card" data-testid="paypal-status">
+      <div className="card-h"><h3>PayPal sandbox status</h3><button className="btn ghost sm" onClick={async () => { await api("/status/recheck", {}); reload?.(); }}>Re-check</button></div>
+      <div className="list">
+        {row("API credentials", p.configured ? p.healthy : false, !p.configured ? "not set" : p.healthy ? "connected (OAuth OK)" : "auth failed")}
+        {row("Vault token (payment token)", p.vaultTokenPresent, p.vaultTokenPresent ? `present${p.email ? " · " + p.email : ""}` : "none yet")}
+        {row("Endpoint", null, p.baseUrl.replace("https://", ""))}
+      </div>
+      {p.lastError ? <div className="err small">Last API error ({new Date(p.lastError.at).toLocaleTimeString()}): {p.lastError.message}</div>
+        : <p className="muted small">No PayPal API errors since the server started{p.lastOkAt ? ` · last success ${new Date(p.lastOkAt).toLocaleTimeString()}` : ""}.</p>}
+      {!p.configured && <p className="muted small">{p.error}</p>}
+    </div>
+  );
+}
+
+function Overview({ status, reload }: { status: Status; reload?: () => void }) {
   const { data: b } = usePoll<Budget>("/budget", 2500);
   const { data: ints } = usePoll<Intent[]>("/intents", 2500);
   const awaiting = ints?.filter((i) => i.status === "awaiting_approval").length ?? 0;
@@ -61,6 +79,7 @@ function Overview({ status }: { status: Status }) {
         <div className="card stat"><span>Denied</span><b>{count("DENY")}</b></div>
         <a href="#/inbox" className="card stat"><span>Waiting on you</span><b className={awaiting ? "accent" : ""}>{awaiting}</b></a>
       </div>
+      <PayPalPanel status={status} reload={reload} />
       <div className="grid2"><Feed /><ActivePolicy /></div>
     </>
   );
@@ -265,7 +284,7 @@ export default function App() {
           {!(o.paypal && o.policy && o.agent) && <button className="btn ghost sm" onClick={() => { localStorage.removeItem("allowance_skip"); setSkipped(false); location.hash = "#/overview"; }}>Finish setup</button>}</div>
       </aside>
       <main>
-        {page === "overview" && <Overview status={status} />}
+        {page === "overview" && <Overview status={status} reload={load} />}
         {page === "inbox" && <Inbox />}
         {page === "ledger" && <Ledger />}
         {page === "policy" && <div className="page-narrow"><h2>Policy</h2><p className="muted">Write it like you'd say it. Confirm the compiled rules; those exact rules are enforced.</p><div className="card"><PolicyEditor ai={status.ai.enabled} onSaved={() => { load(); setPv(pv + 1); }} /></div><ActivePolicy version={pv} /></div>}

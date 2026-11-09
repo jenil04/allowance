@@ -169,9 +169,20 @@ export async function prepareApprovalOrder(d: Deps, id: string) {
   } catch (e: any) { patch(d.db, id, { error: e.message }); throw e; }
 }
 
+/** Budget re-check for an owner-approved ASK, using the *current* policy and spend (other spend may have landed since the ask). */
+function approvalBudgetError(db: Db, row: any, now = Date.now()): string | null {
+  const b = budgetState(db, now);
+  if (!b.hasPolicy) return "No policy is active, so this purchase cannot be approved.";
+  if (Math.round(row.amount * 100) > Math.round(b.remaining * 100))
+    return `Approving this would exceed your $${b.budget.toFixed(2)} monthly budget: $${row.amount.toFixed(2)} requested, only $${b.remaining.toFixed(2)} left this month. Decline it or raise the budget in Policy.`;
+  return null;
+}
+
 export async function approveIntent(d: Deps, id: string) {
   const row = getIntentRow(d.db, id);
   if (!row || row.status !== "awaiting_approval") throw new Error("Intent is not awaiting approval");
+  const over = await locked(() => approvalBudgetError(d.db, row, (d.now ?? Date.now)()));
+  if (over) { patch(d.db, id, { error: over }); logActivity(d.db, "error", `Approval blocked · ${row.vendor} · ${over}`, id); throw new Error(over); }
   const url = await prepareApprovalOrder(d, id);
   if (!url) throw new Error("PayPal returned no approval link");
   logActivity(d.db, "approve", `Owner opened PayPal approval · ${row.vendor} $${row.amount}`, id);
@@ -183,7 +194,17 @@ export async function captureAfterApproval(d: Deps, id: string, orderId: string)
   const row = getIntentRow(d.db, id);
   if (!row || row.paypal_order_id !== orderId) throw new Error("Unknown order");
   if (row.status === "captured") return;
-  patch(d.db, id, { status: "charging", counted_at: Date.now() });
+  // The owner may have approved on PayPal long after the ask: re-check the budget and reserve it atomically before capturing.
+  const over = await locked(() => {
+    const e = approvalBudgetError(d.db, row, (d.now ?? Date.now)());
+    if (!e) patch(d.db, id, { status: "charging", counted_at: Date.now(), error: null });
+    return e;
+  });
+  if (over) {
+    patch(d.db, id, { status: "awaiting_approval", error: over });
+    logActivity(d.db, "error", `Not captured, over budget · ${row.vendor} · ${over}`, id);
+    return;
+  }
   try {
     let o = await d.paypal.captureOrder(orderId);
     if (!recordCapture(d, id, o)) { patch(d.db, id, { status: "payment_failed", error: `PayPal order ended in status ${o.status}` }); }

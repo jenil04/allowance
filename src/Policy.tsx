@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "./api";
+import { DEMO_POLICY_TEXT } from "../shared/demo";
 import { CATEGORIES, CATEGORY_LABEL, type Chip, type Policy } from "../shared/policy";
 
-const EXAMPLE = "Monthly budget $100. Max $20 per purchase for APIs and data. No subscriptions. Never buy from gambling or crypto exchanges. Always trust OpenAI and Anthropic. Ask me for anything over $50, and ask me about any other new vendor.";
+const EXAMPLE = DEMO_POLICY_TEXT;
 
 type Preview = { rules: Policy; chips: Chip[]; sources: Record<string, string>; compiledBy: string };
 
@@ -22,7 +23,7 @@ export function ChipList({ chips, sources, onHover }: { chips: Chip[]; sources?:
   return <div className="chips">{chips.map((c) => <span key={c.id} className={`chip ${c.kind}${sources?.[c.ruleKey] ? " linked" : ""}`} onMouseEnter={() => onHover?.(c.ruleKey)} onMouseLeave={() => onHover?.(null)}>{c.label}</span>)}</div>;
 }
 
-const blank = { monthlyBudget: 100, perPurchaseCap: "", caps: {} as Record<string, string>, blocked: ["gambling", "crypto"] as string[], noSubs: true, askOver: "50", askNew: true };
+const blank = { monthlyBudget: 100, perPurchaseCap: "", caps: { api_credits: "20", data: "20" } as Record<string, string>, blocked: [] as string[], noSubs: true, askOver: "50", askNew: true };
 
 function Structured({ onPreview }: { onPreview: (p: Preview) => void }) {
   const [f, setF] = useState(blank);
