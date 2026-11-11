@@ -71,13 +71,13 @@ await caption(`Agents can buy things now. Today it's all-or-nothing: <br>hand ov
 await sleep(5500);
 await caption(`Allowance sits in between: you write a budget in plain English, <br>and PayPal checkout enforces it.`);
 await scrollTo(380); await sleep(2500);
-await caption(`The PayPal sandbox status is right here on the overview.<small>Credentials are not connected in this recording.</small>`);
+await caption(`The PayPal sandbox status is right here on the overview.<small>Sandbox credentials are connected in this recording.</small>`);
 await sleep(3500); await scrollTo(0);
 
 // 2. Onboarding: Connect PayPal
 await click("button", "Finish setup");
 await sleep(1200);
-await caption(`Step 1: Connect PayPal. <small>PayPal sandbox credentials are added at setup; this take shows the flow.</small>`);
+await caption(`Step 1: Connect PayPal. <small>Sandbox credentials are connected; a Vault payment token still needs Save payment methods enabled on the PayPal app.</small>`);
 await sleep(5000);
 await scrollTo(260);
 await caption(`You approve once on PayPal and a Vault v3 payment token is saved, <br>so approved purchases charge without a login.<small>Allowance never fakes PayPal responses.</small>`);
@@ -124,7 +124,7 @@ await sleep(2500);
 await scrollTo(0);
 const child = spawn("npm", ["run", "--silent", "demo:agent"], { cwd: ROOT, env: { ...process.env }, stdio: "ignore" });
 const done = new Promise((r) => child.on("exit", r));
-await caption(`Live: the overview updates as decisions are made.<small>(Sandbox not connected, so approved purchases show "payment failed: not connected".)</small>`);
+await caption(`Live: the overview updates as decisions are made.<small>(Sandbox credentials are connected. Auto-approved purchases still need a Vault payment token, which this app is not yet authorized to create.)</small>`);
 await Promise.race([done, sleep(60000)]);
 await sleep(4000);
 await scrollTo(380); await sleep(2500); await scrollTo(0);
