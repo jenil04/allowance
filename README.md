@@ -113,7 +113,7 @@ npm run build
 
 ## Honest limits
 
-- The PayPal integration is written against the documented sandbox API and unit-tested with mocked `fetch`, but it has not yet been run against live sandbox credentials. Request bodies, headers and enums were checked against PayPal's published OpenAPI specs (see links in `server/paypal.ts`). Run `npm run paypal:selftest` with sandbox creds to verify live; the Overview page shows a PayPal status panel (credentials, vault token, last API error).
+- Live sandbox verification on Nov 11 2026 (api-m.sandbox.paypal.com): OAuth; Orders v2 create of a $1.00 ASK order; a sandbox personal buyer approving the checkout; capture COMPLETED; and a full refund COMPLETED. Vault v3 setup tokens still return 403 NOT_AUTHORIZED (debug_id f749822fe73c8), so a vaulted auto-capture was not verified. Request bodies, headers and enums were checked against PayPal's published OpenAPI specs (see links in `server/paypal.ts`). The client is also unit-tested with mocked `fetch`. Run `npm run paypal:selftest` with sandbox creds to re-check; the Overview page shows a PayPal status panel (credentials, vault token, last API error).
 - Single owner, single policy, USD only. In-memory rate limiter and a process-local budget lock (one server instance).
 - An owner-approved ASK is re-checked against the budget at approval time and again before capture; if it no longer fits, the owner sees an error and the purchase stays in the inbox (decline it or raise the budget).
 
