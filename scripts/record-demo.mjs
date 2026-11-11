@@ -77,7 +77,7 @@ await sleep(3500); await scrollTo(0);
 // 2. Onboarding: Connect PayPal
 await click("button", "Finish setup");
 await sleep(1200);
-await caption(`Step 1: Connect PayPal. <small>Sandbox credentials are connected; a Vault payment token still needs Save payment methods enabled on the PayPal app.</small>`);
+await caption(`Step 1: Connect PayPal. <small>Sandbox credentials are connected. No Vault token was created in this recording, so auto-approved charges can't be captured yet.</small>`);
 await sleep(5000);
 await scrollTo(260);
 await caption(`You approve once on PayPal and a Vault v3 payment token is saved, <br>so approved purchases charge without a login.<small>Allowance never fakes PayPal responses.</small>`);
@@ -89,7 +89,14 @@ await sleep(600);
 await caption(`Step 2: write the policy in plain English.`);
 await sleep(1500);
 const ta = await page.$("textarea");
-await ta.click({ clickCount: 3 }); await page.keyboard.press("Backspace");
+await ta.click();
+// React controlled textarea: native setter + input event clears state. Triple-click/Backspace left the default text in place.
+await ta.evaluate((el) => {
+  const proto = window.HTMLTextAreaElement.prototype;
+  const desc = Object.getOwnPropertyDescriptor(proto, "value");
+  desc.set.call(el, "");
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+});
 await page.keyboard.type(HERO, { delay: 38 });
 await sleep(1200);
 await caption(`A real LLM call compiles it into typed rules.<small>Code, not the LLM, enforces them.</small>`);
@@ -128,7 +135,7 @@ await caption(`Live: the overview updates as decisions are made.<small>(Sandbox 
 await Promise.race([done, sleep(60000)]);
 await sleep(4000);
 await scrollTo(380); await sleep(2500); await scrollTo(0);
-await caption(`The $15 OpenAI top-up fits every rule, so it's APPROVED automatically.`);
+await caption(`$15 OpenAI top-up: under $50, but a new vendor, so it asks first.`);
 await sleep(3500);
 await go("#/ledger");
 await caption(`The $40 Databento purchase breaks the $20 data cap: DENIED, quoting the rule.`);
@@ -139,7 +146,7 @@ await page.evaluate(() => { const r = [...document.querySelectorAll("tr.click")]
 await sleep(4500);
 
 await go("#/inbox");
-await caption(`The $64 Lambda Labs purchase is a new vendor over budget caps: ASK.<small>It waits for you as an approval card; approving goes through PayPal's own checkout.</small>`);
+await caption(`The $64 Lambda charge is over the $50 ask limit, so it waits for the owner.<small>Approving goes through PayPal's own checkout.</small>`);
 await sleep(6500);
 
 // 6. Ledger + budget
@@ -151,7 +158,7 @@ await page.evaluate(() => { const r = [...document.querySelectorAll("tr.click")]
 await sleep(1500);
 await scrollTo(250); await sleep(3500);
 await go("#/overview");
-await caption(`And the budget meter tracks this month's spend against the $100 allowance.`);
+await caption(`The budget meter is still at $0: nothing was charged without the owner's OK.`);
 await sleep(5000);
 
 // 7. End card
