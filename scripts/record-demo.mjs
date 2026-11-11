@@ -135,7 +135,7 @@ await caption(`Live: the overview updates as decisions are made.<small>(Sandbox 
 await Promise.race([done, sleep(60000)]);
 await sleep(4000);
 await scrollTo(380); await sleep(2500); await scrollTo(0);
-await caption(`The $15 OpenAI top-up is under $50, but OpenAI is a new vendor, so the policy asks first.`);
+await caption(`$15 OpenAI top-up: under $50, but a new vendor, so it asks first.`);
 await sleep(3500);
 await go("#/ledger");
 await caption(`The $40 Databento purchase breaks the $20 data cap: DENIED, quoting the rule.`);
@@ -146,7 +146,7 @@ await page.evaluate(() => { const r = [...document.querySelectorAll("tr.click")]
 await sleep(4500);
 
 await go("#/inbox");
-await caption(`The $64 Lambda Labs purchase is a new vendor over budget caps: ASK.<small>It waits for you as an approval card; approving goes through PayPal's own checkout.</small>`);
+await caption(`The $64 Lambda charge is over the $50 ask limit, so it waits for the owner.<small>Approving goes through PayPal's own checkout.</small>`);
 await sleep(6500);
 
 // 6. Ledger + budget
